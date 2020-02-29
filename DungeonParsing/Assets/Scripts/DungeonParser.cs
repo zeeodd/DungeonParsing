@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class DungeonParser : MonoBehaviour
 {
+    #region Variables
     // Text Data Variables
     public TextAsset data;
     string[] linesFromfile;
@@ -11,141 +12,248 @@ public class DungeonParser : MonoBehaviour
     // Parsing Variables
     private int dungeonWidth;
     private int dungeonHeight;
-    List<int> visitedRowSpaces = new List<int>();
-    List<int> visitedColSpaces = new List<int>();
-    List<Vector2> visited = new List<Vector2>();
+    private int totalEmpty;
+    List<Vector2> visitedTiles = new List<Vector2>();
 
-    Dictionary<Vector2, List<Vector2>> spaces = new Dictionary<Vector2, List<Vector2>>();
+    bool orthoBool = false;
+    bool diagBool = false;
+    bool traverseBool = true;
+    #endregion
 
+    #region LifeCycle
     private void Awake()
     {
         linesFromfile = data.text.Split("\n"[0]);
         dungeonWidth = linesFromfile[0].Length;
         dungeonHeight = linesFromfile.Length;
 
-        for (int i = 0; i < dungeonWidth; i++)
-        {
-            visitedColSpaces.Add(i);
-        }
-
+        // Find the number of completely empty tiles
         for (int i = 0; i < dungeonHeight; i++)
         {
-            visitedRowSpaces.Add(i);
+            for (int j = 0; j < dungeonWidth; j++)
+            {
+                if (linesFromfile[i][j] == ' ')
+                {
+                    totalEmpty++;
+                }
+            }
         }
     }
+
     void Start()
     {
-        Debug.Log(Parse());
-    }
+        orthoBool = ParseDungeon(false);
+        diagBool = ParseDungeon(true);
 
-    private bool OrthogonalParse()
-    {
-
-        bool verdict = false;
-
-        // x, i = current row
-        // y, j = current col
-        for (int i = 0; i < dungeonHeight; i++)
+        Debug.Log("This map can be traversed orthogonally: " + orthoBool);
+        Debug.Log("This map can be traversed orthogonally & diagonally: " + diagBool);
+        
+        if (orthoBool || diagBool)
         {
-            for (int j = 0; j < dungeonWidth; j++)
+            traverseBool = false;
+        }
+
+        Debug.Log("This map can't be traversed at all: " + traverseBool);
+    }
+    #endregion
+
+    private bool ParseDungeon(bool diagToggle)
+    {
+        // Instantiate a list of visited tiles and a stack of unexplored ones
+        // A stack is used here becuase we want to keep looking at the closest tile (DFS)
+        List<Vector2> visitedTiles = new List<Vector2>();
+        Stack<Vector2> unexploredTiles = new Stack<Vector2>();
+
+        // Get a random blank tile and add it to the unexplored tiles stack
+        unexploredTiles.Push(GetRandomBlankTile());
+
+        // Keep running until all tiles have been explored
+        while (unexploredTiles.Count > 0)
+        {
+            Vector2 tile = unexploredTiles.Pop();
+
+            if (visitedTiles.Contains(tile))
             {
-                print(dungeonWidth);
-                if (linesFromfile[i][j] == ' ')
+                continue;
+            }
+
+            visitedTiles.Add(tile);
+
+            foreach (Vector2 neighbor in GetNeighbors(tile, diagToggle))
+            {
+                if (!visitedTiles.Contains(neighbor))
                 {
-                    visitedColSpaces.Remove(j);
-                    visitedRowSpaces.Remove(i);
+                    unexploredTiles.Push(neighbor);
                 }
             }
         }
 
-        if (visitedColSpaces.Count == 0 && visitedRowSpaces.Count == 0)
-        {
-            verdict = true;
-        }
-
-        return verdict;
+        return totalEmpty == visitedTiles.Count;
     }
 
-    private bool Parse()
+    private Vector2 GetRandomBlankTile()
     {
-        bool verdict = true;
+        bool isBlank = false;
+        Vector2 blankTile = Vector2.zero;
 
-        // x, i = current row
-        // y, j = current col
-        for (int i = 0; i < dungeonHeight; i++)
+        while (!isBlank)
         {
-            for (int j = 0; j < dungeonWidth; j++)
+            Vector2 randomTile = new Vector2(Random.Range(0, dungeonWidth - 1), Random.Range(0, dungeonHeight - 1));
+            if (linesFromfile[(int)randomTile.y][(int)randomTile.x] == ' ')
             {
-                if (linesFromfile[i][j] == ' ')
+                blankTile = randomTile;
+                isBlank = true;
+            }
+        }
+
+        return blankTile;
+    }
+
+    private bool CheckIfBlankTile(Vector2 tile)
+    {
+        //Debug.Log(tile);
+
+        bool returnbool = false;
+        if (linesFromfile[(int)tile.y][(int)tile.x] == ' ')
+        {
+            returnbool = true;
+        }
+
+        return returnbool;
+    }
+
+    private List<Vector2> GetNeighbors(Vector2 tile, bool diagToggle)
+    {
+        List<Vector2> neighbors = new List<Vector2>();
+        bool top = true;
+        bool left = true;
+        bool right = true;
+        bool bot = true;
+
+        // Check if ortho neighbors exist or not. Return false if one doesn't exist.
+        if (tile.y - 1 < 0)
+        {
+            top = false;
+        }
+        if (tile.y + 1 > dungeonHeight - 1)
+        {
+            bot = false;
+        }
+        if (tile.x - 1 < 0)
+        {
+            left = false;
+        }
+        if (tile.x + 1 > dungeonWidth - 1)
+        {
+            right = false;
+        }
+
+        if (top == true)
+        {
+            Vector2 topTile = new Vector2(tile.x, tile.y - 1);
+            if (CheckIfBlankTile(topTile))
+            {
+                neighbors.Add(topTile);
+            }
+        }
+
+        if (bot == true)
+        {
+            Vector2 botTile = new Vector2(tile.x, tile.y + 1);
+            if (CheckIfBlankTile(botTile))
+            {
+                neighbors.Add(botTile);
+            }
+        }
+
+        if (left == true)
+        {
+            Vector2 leftTile = new Vector2(tile.x - 1, tile.y);
+            if (CheckIfBlankTile(leftTile))
+            {
+                neighbors.Add(leftTile);
+            }
+        }
+
+        if (right == true)
+        {
+            Vector2 rightTile = new Vector2(tile.x + 1, tile.y);
+            if (CheckIfBlankTile(rightTile))
+            {
+                neighbors.Add(rightTile);
+            }
+        }
+
+        if (diagToggle)
+        {
+            bool topleft = true;
+            bool topright = true;
+            bool botleft = true;
+            bool botright = true;
+
+            // Check if diag neighbors exist or not. Return false if one doesn't exist.
+            if (tile.y - 1 < 0 || tile.x - 1 < 0)
+            {
+                topleft = false;
+            }
+            if (tile.y - 1 < 0 || tile.x + 1  > dungeonWidth - 1)
+            {
+                topright = false;
+            }
+            if (tile.x - 1 < 0 || tile.y + 1 > dungeonHeight - 1)
+            {
+                botleft = false;
+            }
+            if (tile.x + 1 > dungeonWidth - 1 || tile.y + 1 > dungeonHeight - 1)
+            {
+                botright = false;
+            }
+
+            if (topleft == true)
+            {
+                Vector2 tlTile = new Vector2(tile.x - 1, tile.y - 1);
+                if (CheckIfBlankTile(tlTile))
                 {
-                    bool top = false;
-                    bool left = false;
-                    bool right = false;
-                    bool bot = false;
-                    int numTrue = 0;
+                    neighbors.Add(tlTile);
+                }
+            }
 
-                    // Check if not null
-                    if(i-1 < 0)
-                    {
-                        top = true;
-                        numTrue++;
-                    }
-                    if (i + 1 > dungeonWidth)
-                    {
-                        bot = true;
-                    }
-                    if (j - 1 < 0)
-                    {
-                        left = true;
-                    }
-                    if (j + 1 > dungeonHeight)
-                    {
-                        right = true;
-                    }
+            if (topright == true)
+            {
+                Vector2 trTile = new Vector2(tile.x + 1, tile.y - 1);
+                if (CheckIfBlankTile(trTile))
+                {
+                    neighbors.Add(trTile);
+                }
+            }
 
-                    if (left == false && right == false && top == false && bot == false)
-                    {
-                        if (linesFromfile[i - 1][j] != ' ' && linesFromfile[i][j - 1] != ' ' && linesFromfile[i + 1][j] != ' ' && linesFromfile[i][j + 1] != ' ')
-                        {
-                            verdict = false;
-                        }
-                    } 
-                    else
-                    {
-                        if (left == false && right == true)
-                        {
-                            if (linesFromfile[i][j - 1] == ' ')
-                            {
-                                verdict = false;
-                            }
-                        }
-                        if (right == false && left == true)
-                        {
-                            if (linesFromfile[i][j + 1] == ' ')
-                            {
-                                verdict = false;
-                            }
-                        }
-                        if (top == false && bot == true)
-                        {
-                            if (linesFromfile[i - 1][j] == ' ')
-                            {
-                                verdict = false;
-                            }
-                        }
-                        if (bot == false && top == true)
-                        {
-                            if (linesFromfile[i + 1][j] == ' ')
-                            {
-                                verdict = false;
-                            }
-                        }
-                    }
+            if (botleft == true)
+            {
+                Vector2 blTile = new Vector2(tile.x - 1, tile.y + 1);
+                if (CheckIfBlankTile(blTile))
+                {
+                    neighbors.Add(blTile);
+                }
+            }
+
+            if (botright == true)
+            {
+                Vector2 brTile = new Vector2(tile.x + 1, tile.y + 1);
+                if (CheckIfBlankTile(brTile))
+                {
+                    neighbors.Add(brTile);
                 }
             }
         }
 
-        return verdict;
-    }
+        /*
+        Debug.Log("TILE: " + tile);
+        foreach(Vector2 n in neighbors)
+        {
+            Debug.Log("NEIGHBOR: " + n);
+        }
+        */
 
+        return neighbors;
+    }
 }
